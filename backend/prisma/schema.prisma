@@ -1,0 +1,176 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  phone             String?
+  passwordHash      String   @map("password_hash")
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  dateOfBirth       DateTime? @map("date_of_birth")
+  nationality       String?
+  profileImageUrl   String?   @map("profile_image_url")
+  preferredLanguage String    @default("es") @map("preferred_language")
+  isVerified        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  bookings          Booking[]
+  checkIns          CheckIn[]
+  reviews           Review[]
+}
+
+model PropertyOwner {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  companyName  String?
+  contactName  String
+  phone        String?
+  taxId        String?
+  role         String   @default("owner")
+  permissions  Json?
+  createdAt    DateTime @default(now())
+
+  properties           Property[]
+  verifiedCheckIns     CheckIn[]       @relation("CheckInVerifiedBy")
+  processedCheckOuts   CheckOut[]      @relation("CheckOutProcessedBy")
+}
+
+model Property {
+  id            String   @id @default(uuid())
+  ownerId       String
+  name          String
+  description   String?
+  propertyType  String
+  address       Json
+  totalRooms    Int      @default(1)
+  maxGuests     Int
+  amenities     Json?
+  houseRules    String?
+  checkInTime   DateTime?
+  checkOutTime  DateTime?
+  qrCodeData    String   @unique
+  images        Json?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  owner         PropertyOwner @relation(fields: [ownerId], references: [id])
+  rooms         Room[]
+  bookings      Booking[]
+  checkIns      CheckIn[]
+  checkOuts     CheckOut[]
+  reviews       Review[]
+}
+
+model Room {
+  id             String   @id @default(uuid())
+  propertyId     String
+  roomNumber     String
+  roomType       String?
+  maxGuests      Int      @default(2)
+  pricePerNight  Decimal?
+  qrCodeData     String   @unique
+  isAvailable    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  property       Property @relation(fields: [propertyId], references: [id])
+  bookings       Booking[]
+
+  @@unique([propertyId, roomNumber])
+}
+
+model Booking {
+  id              String   @id @default(uuid())
+  userId          String
+  propertyId      String
+  roomId          String?
+  bookingReference String  @unique
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  guestsCount     Int
+  guestDetails    Json?
+  totalAmount     Decimal
+  bookingStatus   String   @default("confirmed")
+  specialRequests String?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+  property        Property @relation(fields: [propertyId], references: [id])
+  room            Room?    @relation(fields: [roomId], references: [id])
+  checkIn         CheckIn?
+  checkOut        CheckOut?
+  review          Review?
+}
+
+model CheckIn {
+  id                   String   @id @default(uuid())
+  bookingId            String   @unique
+  userId               String
+  propertyId           String
+  checkInTimestamp     DateTime @default(now())
+  identityDocumentUrl  String?
+  selfieUrl            String?
+  digitalSignature     String?
+  deviceInfo           Json?
+  locationCoordinates  String?
+  verificationStatus   String   @default("pending")
+  verifiedById         String?
+  notes                String?
+
+  booking              Booking  @relation(fields: [bookingId], references: [id])
+  user                 User     @relation(fields: [userId], references: [id])
+  property             Property @relation(fields: [propertyId], references: [id])
+  verifiedBy           PropertyOwner? @relation("CheckInVerifiedBy", fields: [verifiedById], references: [id])
+  checkOut             CheckOut?
+}
+
+model CheckOut {
+  id                   String   @id @default(uuid())
+  bookingId            String   @unique
+  checkInId            String   @unique
+  propertyId           String
+  checkOutTimestamp    DateTime @default(now())
+  roomConditionPhotos  Json?
+  damagesReported      String?
+  additionalCharges    Decimal  @default(0)
+  guestSignature       String?
+  staffNotes           String?
+  processedById        String
+
+  booking              Booking       @relation(fields: [bookingId], references: [id])
+  checkIn              CheckIn       @relation(fields: [checkInId], references: [id])
+  property             Property      @relation(fields: [propertyId], references: [id])
+  processedBy          PropertyOwner @relation("CheckOutProcessedBy", fields: [processedById], references: [id])
+}
+
+model Review {
+  id                 String   @id @default(uuid())
+  bookingId          String   @unique
+  userId             String
+  propertyId         String
+  overallRating      Int
+  cleanlinessRating  Int
+  locationRating     Int
+  valueRating        Int
+  serviceRating      Int
+  comment            String?
+  photos             Json?
+  isAnonymous        Boolean  @default(false)
+  responseFromOwner  String?
+  responseDate       DateTime?
+  createdAt          DateTime @default(now())
+
+  booking            Booking  @relation(fields: [bookingId], references: [id])
+  user               User     @relation(fields: [userId], references: [id])
+  property           Property @relation(fields: [propertyId], references: [id])
+}
