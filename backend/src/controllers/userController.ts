@@ -25,24 +25,44 @@ export const createUser = async (req: Request, res: Response) => {
 };
 
 export const getAllUsers = async (req: Request, res: Response) => {
-  const { page = '1', limit = '10', search = '' } = req.query;
+  const { 
+    page = '1', 
+    limit = '10', 
+    search = '', 
+    verified, 
+    from, 
+    to 
+} = req.query;
 
   const pageNumber = parseInt(page as string, 10) || 1;
   const limitNumber = parseInt(limit as string, 10) || 10;
   const skip = (pageNumber - 1) * limitNumber;
 
   const searchTerm = (search as string).trim();
+  const verifiedParam = req.query.verified;
+let isVerified: boolean | undefined = undefined;
 
-  let where = {};
+if (verifiedParam === 'true') isVerified = true;
+if (verifiedParam === 'false') isVerified = false;
 
-  if (searchTerm !== '') {
-    where = {
-      OR: [
+  let where: any = {};
+
+  if (searchTerm) {
+    where.OR = [
         { firstName: { contains: searchTerm, mode: 'insensitive' } },
         { lastName: { contains: searchTerm, mode: 'insensitive' } },
         { email: { contains: searchTerm, mode: 'insensitive' } }
-      ]
-    };
+      ];
+  }
+
+  if (isVerified !== undefined){
+    where.isVerified = isVerified;
+  }
+
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from as string);
+    if (to) where.createdAt.lte = new Date (to as string);
   }
 
   try {
