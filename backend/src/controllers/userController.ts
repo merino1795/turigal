@@ -96,3 +96,61 @@ if (verifiedParam === 'false') isVerified = false;
     res.status(500).json({ message: 'Error al obtener usuarios', error: error.message });
   }
 };
+
+import { Parser } from 'json2csv';
+
+export const exportUsers = async (req: Request, res: Response) => {
+  const { search = '', verified, from, to } = req.query;
+
+  const searchTerm = (search as string).trim();
+  const verifiedParam = req.query.verified;
+  let isVerified: boolean | undefined = undefined;
+
+  if (verifiedParam === 'true') isVerified = true;
+  if (verifiedParam === 'false') isVerified = false;
+
+  let where: any = {};
+
+  if (searchTerm) {
+    where.OR = [
+      { firstName: { contains: searchTerm, mode: 'insensitive' } },
+      { lastName: { contains: searchTerm, mode: 'insensitive' } },
+      { email: { contains: searchTerm, mode: 'insensitive' } }
+    ];
+  }
+
+  if (isVerified !== undefined) {
+    where.isVerified = isVerified;
+  }
+
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = new Date(from as string);
+    if (to) where.createdAt.lte = new Date(to as string);
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isVerified: true,
+        createdAt: true
+      }
+    });
+
+    const parser = new Parser({ delimiter: ';' });
+    const csv = parser.parse(users);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename=usuarios.csv');
+    res.send('\uFEFF' + csv);
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al exportar usuarios', error: error.message });
+  }
+};
