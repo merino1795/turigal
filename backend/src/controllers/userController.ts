@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -7,12 +8,14 @@ export const createUser = async (req: Request, res: Response) => {
   const { email, firstName, lastName, password } = req.body;
 
   try {
+    const hashedPassword = await bcrypt.hash(password,10);
+
     const newUser = await prisma.user.create({
       data: {
         email,
         firstName,
         lastName,
-        passwordHash: password,
+        passwordHash: hashedPassword,
         isVerified: false,
       },
     });
@@ -154,3 +157,4 @@ export const exportUsers = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Error al exportar usuarios', error: error.message });
   }
 };
+
