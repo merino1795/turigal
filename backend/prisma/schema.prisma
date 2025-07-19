@@ -21,12 +21,19 @@ model User {
   profileImageUrl   String?   @map("profile_image_url")
   preferredLanguage String    @default("es") @map("preferred_language")
   isVerified        Boolean   @default(false)
+  role              Role      @default(USER)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   bookings          Booking[]
   checkIns          CheckIn[]
   reviews           Review[]
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  USER
 }
 
 model PropertyOwner {

@@ -16,6 +16,7 @@ export const createUser = async (req: Request, res: Response) => {
         firstName,
         lastName,
         passwordHash: hashedPassword,
+        role: 'USER',
         isVerified: false,
       },
     });
@@ -24,6 +25,31 @@ export const createUser = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error(error);
     res.status(500).json({ message: 'Error al crear usuario', error: error.message });
+  }
+};
+
+export const getCurrentUser = async (req: AuthRequest, res: Response) => {
+  const userId = req.user.userId;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isVerified: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener el usuario', error });
   }
 };
 
@@ -100,7 +126,49 @@ if (verifiedParam === 'false') isVerified = false;
   }
 };
 
+export const updateCurrentUser = async (req: AuthRequest, res: Response) => {
+  const userId = req.user.userId;
+  const { firstName, lastName, email } = req.body;
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName,
+        lastName,
+        email,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar el usuario', error });
+  }
+};
+
+export const deleteCurrentUser = async (req: AuthRequest, res: Response) => {
+  const userId = req.user.userId;
+
+  try {
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    res.json({ message: 'Cuenta eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar el usuario', error });
+  }
+};
+
 import { Parser } from 'json2csv';
+import { AuthRequest } from '../middleware/verifyToken';
 
 export const exportUsers = async (req: Request, res: Response) => {
   const { search = '', verified, from, to } = req.query;
