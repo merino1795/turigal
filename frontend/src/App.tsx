@@ -1,11 +1,11 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import AdminDashboard from './pages/admin-dashboard';
+import LoginPanel from './pages/turisgal_login_panel';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/login" element={<LoginPanel/>} />
       </Routes>
     </Router>
   );
