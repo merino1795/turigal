@@ -1,15 +1,20 @@
 import express from 'express';
 import { createUser, getAllUsers, exportUsers, getCurrentUser, updateCurrentUser, deleteCurrentUser} from '../controllers/userController';
 import { verifyToken } from '../middleware/verifyToken';
+import { authorizeRole } from '../middleware/autorizeRole';
 
 const router = express.Router();
 
+// Rutas públicas
 router.post('/', createUser);
-router.get('/', getAllUsers);
-router.get('/export', exportUsers);
-router.get('/user', verifyToken, getCurrentUser);
-router.get('/user', verifyToken, updateCurrentUser);
-router.get('/user', verifyToken, deleteCurrentUser);
 
+// Rutas protegidas que requieren autenticación
+router.get('/', verifyToken, authorizeRole(['ADMIN']), getAllUsers);
+router.get('/export', verifyToken, authorizeRole(['ADMIN']), exportUsers);
+
+// Rutas para el usuario actual autenticado
+router.get('/me', verifyToken, getCurrentUser);
+router.put('/me', verifyToken, updateCurrentUser);
+router.delete('/me', verifyToken, deleteCurrentUser);
 
 export default router;

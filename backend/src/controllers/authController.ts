@@ -9,9 +9,23 @@ export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
+    // Validar que se proporcionen email y contraseña
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email y contraseña son requeridos' });
+    }
+
     // Buscar usuario por email
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        passwordHash: true,
+        role: true,
+        isVerified: true
+      }
     });
 
     if (!user) {
@@ -50,6 +64,8 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: user.role,
+        isVerified: user.isVerified
       },
     });
 
