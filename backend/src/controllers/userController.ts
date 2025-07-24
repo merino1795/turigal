@@ -8,7 +8,16 @@ export const createUser = async (req: Request, res: Response) => {
   const { email, firstName, lastName, password } = req.body;
 
   try {
-    const hashedPassword = await bcrypt.hash(password,10);
+    // Verificar si el email ya existe
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'El email ya está registrado' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
       data: {
@@ -19,6 +28,15 @@ export const createUser = async (req: Request, res: Response) => {
         role: 'USER',
         isVerified: false,
       },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isVerified: true,
+        createdAt: true,
+      }
     });
 
     res.status(201).json(newUser);
@@ -107,6 +125,7 @@ if (verifiedParam === 'false') isVerified = false;
         email: true,
         firstName: true,
         lastName: true,
+        role: true,
         isVerified: true,
         createdAt: true
       }
@@ -123,6 +142,175 @@ if (verifiedParam === 'false') isVerified = false;
   } catch (error: any) {
     console.error(error);
     res.status(500).json({ message: 'Error al obtener usuarios', error: error.message });
+  }
+};
+
+// ✅ NUEVA FUNCIÓN: Obtener usuario por ID
+export const getUserById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    res.json(user);
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener el usuario', error: error.message });
+  }
+};
+
+// ✅ NUEVA FUNCIÓN: Actualizar usuario por ID
+export const updateUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, role, isVerified } = req.body;
+
+  try {
+    // Verificar si el usuario existe
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Si se está cambiando el email, verificar que no esté en uso
+    if (email && email !== existingUser.email) {
+      const emailInUse = await prisma.user.findUnique({
+        where: { email }
+      });
+
+      if (emailInUse) {
+        return res.status(400).json({ message: 'El email ya está en uso por otro usuario' });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(email && { email }),
+        ...(role && { role }),
+        ...(isVerified !== undefined && { isVerified }),
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json(updatedUser);
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al actualizar el usuario', error: error.message });
+  }
+};
+
+// ✅ NUEVA FUNCIÓN: Eliminar usuario por ID
+export const deleteUser = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    // Verificar si el usuario existe
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // Prevenir que el usuario se elimine a sí mismo
+    const currentUserId = (req as any).user?.userId;
+    if (currentUserId === id) {
+      return res.status(400).json({ message: 'No puedes eliminar tu propia cuenta desde aquí' });
+    }
+
+    // Verificar si el usuario tiene reservas o check-ins activos
+    const hasBookings = await prisma.booking.findFirst({
+      where: { userId: id }
+    });
+
+    if (hasBookings) {
+      return res.status(400).json({ 
+        message: 'No se puede eliminar el usuario porque tiene reservas asociadas. Considera desactivarlo en su lugar.' 
+      });
+    }
+
+    await prisma.user.delete({
+      where: { id }
+    });
+
+    res.json({ 
+      message: 'Usuario eliminado correctamente',
+      deletedUser: {
+        id: existingUser.id,
+        email: existingUser.email,
+        firstName: existingUser.firstName,
+        lastName: existingUser.lastName
+      }
+    });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al eliminar el usuario', error: error.message });
+  }
+};
+
+// ✅ NUEVA FUNCIÓN: Cambiar contraseña de usuario
+export const changeUserPassword = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  try {
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
+    // Verificar si el usuario existe
+    const existingUser = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        passwordHash: hashedPassword,
+      },
+    });
+
+    res.json({ message: 'Contraseña actualizada correctamente' });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al cambiar la contraseña', error: error.message });
   }
 };
 
@@ -209,6 +397,7 @@ export const exportUsers = async (req: Request, res: Response) => {
         email: true,
         firstName: true,
         lastName: true,
+        role: true,
         isVerified: true,
         createdAt: true
       }
@@ -225,4 +414,3 @@ export const exportUsers = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Error al exportar usuarios', error: error.message });
   }
 };
-
