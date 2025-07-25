@@ -1,4 +1,4 @@
-// frontend/src/services/api.ts
+// frontend/src/services/api.ts - VERSIÓN COMPLETA
 
 // Cambiar la URL base para usar el proxy
 const API_BASE_URL = '/api'; // ✅ Usar proxy en lugar de URL completa
@@ -26,7 +26,10 @@ export interface PropertyOwner {
   createdAt: string;
   _count?: {
     properties: number;
+    verifiedCheckIns: number;
+    processedCheckOuts: number;
   };
+  properties?: Property[];
 }
 
 export interface Property {
@@ -34,15 +37,25 @@ export interface Property {
   name: string;
   description?: string;
   propertyType: string;
-  address: any; // JSON object
+  address: {
+    street?: string;
+    city: string;
+    state?: string;
+    zipCode?: string;
+    country: string;
+    coordinates?: {
+      lat: number;
+      lng: number;
+    };
+  };
   totalRooms: number;
   maxGuests: number;
-  amenities?: any; // JSON object
+  amenities?: string[];
   houseRules?: string;
   checkInTime?: string;
   checkOutTime?: string;
   qrCodeData: string;
-  images?: any; // JSON object
+  images?: string[];
   isActive: boolean;
   createdAt: string;
   ownerId: string;
@@ -51,11 +64,70 @@ export interface Property {
     contactName: string;
     companyName?: string;
     email: string;
+    phone?: string;
   };
+  rooms?: Room[];
+  bookings?: Booking[];
+  reviews?: Review[];
   _count?: {
     rooms: number;
     bookings: number;
     reviews: number;
+  };
+}
+
+export interface Room {
+  id: string;
+  propertyId: string;
+  roomNumber: string;
+  roomType?: string;
+  maxGuests: number;
+  pricePerNight?: number;
+  qrCodeData: string;
+  isAvailable: boolean;
+  createdAt: string;
+}
+
+export interface Booking {
+  id: string;
+  userId: string;
+  propertyId: string;
+  roomId?: string;
+  bookingReference: string;
+  checkInDate: string;
+  checkOutDate: string;
+  guestsCount: number;
+  guestDetails?: any;
+  totalAmount: number;
+  bookingStatus: string;
+  specialRequests?: string;
+  createdAt: string;
+  user?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface Review {
+  id: string;
+  bookingId: string;
+  userId: string;
+  propertyId: string;
+  overallRating: number;
+  cleanlinessRating: number;
+  locationRating: number;
+  valueRating: number;
+  serviceRating: number;
+  comment?: string;
+  photos?: any;
+  isAnonymous: boolean;
+  responseFromOwner?: string;
+  responseDate?: string;
+  createdAt: string;
+  user?: {
+    firstName: string;
+    lastName: string;
   };
 }
 
@@ -102,12 +174,14 @@ export interface PropertyOwnersResponse {
 export interface PropertyStats {
   totalProperties: number;
   activeProperties: number;
-  inactiveProperties: number;
-  totalRooms: number;
-  availableRooms: number;
-  propertyTypes: Array<{
+  propertiesByType: Array<{
     type: string;
     count: number;
+  }>;
+  topProperties: Array<{
+    id: string;
+    name: string;
+    bookingsCount: number;
   }>;
 }
 
@@ -151,6 +225,13 @@ class ApiService {
       
       if (contentType && contentType.includes('application/json')) {
         data = await response.json();
+      } else if (contentType && contentType.includes('text/csv')) {
+        // Para exportaciones CSV
+        const blob = await response.blob();
+        return {
+          success: true,
+          data: blob as T,
+        };
       } else {
         data = await response.text();
       }
@@ -275,7 +356,6 @@ class ApiService {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Obtener usuario por ID
   async getUserById(id: string): Promise<ApiResponse<User>> {
     try {
       const response = await fetch(`${this.baseUrl}/users/${id}`, {
@@ -316,7 +396,6 @@ class ApiService {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Actualizar usuario
   async updateUser(id: string, userData: {
     firstName?: string;
     lastName?: string;
@@ -341,7 +420,6 @@ class ApiService {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Eliminar usuario
   async deleteUser(id: string): Promise<ApiResponse<{message: string}>> {
     try {
       const response = await fetch(`${this.baseUrl}/users/${id}`, {
@@ -359,7 +437,6 @@ class ApiService {
     }
   }
 
-  // ✅ NUEVA FUNCIÓN: Cambiar contraseña de usuario
   async changeUserPassword(id: string, newPassword: string): Promise<ApiResponse<{message: string}>> {
     try {
       const response = await fetch(`${this.baseUrl}/users/${id}/password`, {
@@ -416,6 +493,337 @@ class ApiService {
       return {
         success: false,
         error: 'Error al exportar usuarios',
+      };
+    }
+  }
+
+  // ===== PROPIEDADES ===== 🏠
+
+  async getProperties(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    propertyType?: string;
+    isActive?: boolean;
+    ownerId?: string;
+    from?: string;
+    to?: string;
+  }): Promise<ApiResponse<PropertiesResponse>> {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.propertyType) queryParams.append('propertyType', params.propertyType);
+        if (params.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+        if (params.ownerId) queryParams.append('ownerId', params.ownerId);
+        if (params.from) queryParams.append('from', params.from);
+        if (params.to) queryParams.append('to', params.to);
+      }
+
+      const response = await fetch(`${this.baseUrl}/properties?${queryParams}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<PropertiesResponse>(response);
+    } catch (error) {
+      console.error('Get properties error:', error);
+      return {
+        success: false,
+        error: 'Error al obtener propiedades',
+      };
+    }
+  }
+
+  async getPropertyById(id: string): Promise<ApiResponse<Property>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/properties/${id}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<Property>(response);
+    } catch (error) {
+      console.error('Get property by ID error:', error);
+      return {
+        success: false,
+        error: 'Error al obtener la propiedad',
+      };
+    }
+  }
+
+  async createProperty(propertyData: {
+    name: string;
+    description?: string;
+    propertyType: string;
+    address: {
+      street?: string;
+      city: string;
+      state?: string;
+      zipCode?: string;
+      country: string;
+    };
+    totalRooms: number;
+    maxGuests: number;
+    amenities?: string[];
+    houseRules?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
+    images?: string[];
+    ownerId?: string;
+  }): Promise<ApiResponse<Property>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/properties`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(propertyData),
+      });
+
+      return this.handleResponse<Property>(response);
+    } catch (error) {
+      console.error('Create property error:', error);
+      return {
+        success: false,
+        error: 'Error al crear propiedad',
+      };
+    }
+  }
+
+  async updateProperty(id: string, propertyData: {
+    name?: string;
+    description?: string;
+    propertyType?: string;
+    address?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      country?: string;
+    };
+    totalRooms?: number;
+    maxGuests?: number;
+    amenities?: string[];
+    houseRules?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
+    images?: string[];
+    isActive?: boolean;
+  }): Promise<ApiResponse<Property>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/properties/${id}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(propertyData),
+      });
+
+      return this.handleResponse<Property>(response);
+    } catch (error) {
+      console.error('Update property error:', error);
+      return {
+        success: false,
+        error: 'Error al actualizar propiedad',
+      };
+    }
+  }
+
+  async deleteProperty(id: string): Promise<ApiResponse<{message: string}>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/properties/${id}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<{message: string}>(response);
+    } catch (error) {
+      console.error('Delete property error:', error);
+      return {
+        success: false,
+        error: 'Error al eliminar propiedad',
+      };
+    }
+  }
+
+  async exportProperties(params?: {
+    search?: string;
+    propertyType?: string;
+    isActive?: boolean;
+    ownerId?: string;
+    from?: string;
+    to?: string;
+  }): Promise<ApiResponse<Blob>> {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        if (params.search) queryParams.append('search', params.search);
+        if (params.propertyType) queryParams.append('propertyType', params.propertyType);
+        if (params.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+        if (params.ownerId) queryParams.append('ownerId', params.ownerId);
+        if (params.from) queryParams.append('from', params.from);
+        if (params.to) queryParams.append('to', params.to);
+      }
+
+      const response = await fetch(`${this.baseUrl}/properties/export/csv?${queryParams}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        return {
+          success: true,
+          data: blob,
+        };
+      } else {
+        return {
+          success: false,
+          error: 'Error al exportar propiedades',
+        };
+      }
+    } catch (error) {
+      console.error('Export properties error:', error);
+      return {
+        success: false,
+        error: 'Error al exportar propiedades',
+      };
+    }
+  }
+
+  async getPropertyStats(): Promise<ApiResponse<PropertyStats>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/properties/stats/overview`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<PropertyStats>(response);
+    } catch (error) {
+      console.error('Get property stats error:', error);
+      return {
+        success: false,
+        error: 'Error al obtener estadísticas de propiedades',
+      };
+    }
+  }
+
+  // ===== PROPIETARIOS ===== 🏢
+
+  async getPropertyOwners(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    from?: string;
+    to?: string;
+  }): Promise<ApiResponse<PropertyOwnersResponse>> {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params) {
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.from) queryParams.append('from', params.from);
+        if (params.to) queryParams.append('to', params.to);
+      }
+
+      const response = await fetch(`${this.baseUrl}/property-owners?${queryParams}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<PropertyOwnersResponse>(response);
+    } catch (error) {
+      console.error('Get property owners error:', error);
+      return {
+        success: false,
+        error: 'Error al obtener propietarios',
+      };
+    }
+  }
+
+  async getPropertyOwnerById(id: string): Promise<ApiResponse<PropertyOwner>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/property-owners/${id}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<PropertyOwner>(response);
+    } catch (error) {
+      console.error('Get property owner by ID error:', error);
+      return {
+        success: false,
+        error: 'Error al obtener el propietario',
+      };
+    }
+  }
+
+  async createPropertyOwner(ownerData: {
+    email: string;
+    password: string;
+    contactName: string;
+    companyName?: string;
+    phone?: string;
+    taxId?: string;
+    permissions?: any;
+  }): Promise<ApiResponse<PropertyOwner>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/property-owners`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(ownerData),
+      });
+
+      return this.handleResponse<PropertyOwner>(response);
+    } catch (error) {
+      console.error('Create property owner error:', error);
+      return {
+        success: false,
+        error: 'Error al crear propietario',
+      };
+    }
+  }
+
+  async updatePropertyOwner(id: string, ownerData: {
+    contactName?: string;
+    companyName?: string;
+    phone?: string;
+    taxId?: string;
+    permissions?: any;
+  }): Promise<ApiResponse<PropertyOwner>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/property-owners/${id}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(ownerData),
+      });
+
+      return this.handleResponse<PropertyOwner>(response);
+    } catch (error) {
+      console.error('Update property owner error:', error);
+      return {
+        success: false,
+        error: 'Error al actualizar propietario',
+      };
+    }
+  }
+
+  async deletePropertyOwner(id: string): Promise<ApiResponse<{message: string}>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/property-owners/${id}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      return this.handleResponse<{message: string}>(response);
+    } catch (error) {
+      console.error('Delete property owner error:', error);
+      return {
+        success: false,
+        error: 'Error al eliminar propietario',
       };
     }
   }
