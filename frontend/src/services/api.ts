@@ -1,9 +1,10 @@
-// frontend/src/services/api.ts - VERSIÓN COMPLETA
+// frontend/src/services/api.ts - ARCHIVO FINAL COMPLETO
 
-// Cambiar la URL base para usar el proxy
-const API_BASE_URL = '/api'; // ✅ Usar proxy en lugar de URL completa
+// URL base para usar el proxy de Create React App
+const API_BASE_URL = '/api';
 
-// Tipos TypeScript
+// ===== TIPOS TYPESCRIPT =====
+
 export interface User {
   id: string;
   email: string;
@@ -185,6 +186,8 @@ export interface PropertyStats {
   }>;
 }
 
+// ===== CLASE API SERVICE =====
+
 class ApiService {
   private baseUrl: string;
   private token: string | null = null;
@@ -208,7 +211,7 @@ class ApiService {
     return headers;
   }
 
-  // Manejar respuestas HTTP - MEJORADO
+  // Manejar respuestas HTTP
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     try {
       // Si la respuesta es 401, limpiar token
@@ -309,6 +312,7 @@ class ApiService {
     limit?: number;
     search?: string;
     verified?: boolean;
+    role?: string;
     from?: string;
     to?: string;
   }): Promise<ApiResponse<UsersResponse>> {
@@ -320,6 +324,7 @@ class ApiService {
         if (params.limit) queryParams.append('limit', params.limit.toString());
         if (params.search) queryParams.append('search', params.search);
         if (params.verified !== undefined) queryParams.append('verified', params.verified.toString());
+        if (params.role) queryParams.append('role', params.role);
         if (params.from) queryParams.append('from', params.from);
         if (params.to) queryParams.append('to', params.to);
       }
@@ -455,9 +460,56 @@ class ApiService {
     }
   }
 
+  async updateCurrentUser(userData: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  }): Promise<ApiResponse<User>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users/me`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(userData),
+      });
+
+      return this.handleResponse<User>(response);
+    } catch (error) {
+      console.error('Update current user error:', error);
+      return {
+        success: false,
+        error: 'Error al actualizar usuario actual',
+      };
+    }
+  }
+
+  async deleteCurrentUser(): Promise<ApiResponse<{message: string}>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users/me`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      const result = await this.handleResponse<{message: string}>(response);
+      
+      // Si se elimina exitosamente, limpiar el token
+      if (result.success) {
+        this.logout();
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Delete current user error:', error);
+      return {
+        success: false,
+        error: 'Error al eliminar usuario actual',
+      };
+    }
+  }
+
   async exportUsers(params?: {
     search?: string;
     verified?: boolean;
+    role?: string;
     from?: string;
     to?: string;
   }): Promise<ApiResponse<Blob>> {
@@ -467,6 +519,7 @@ class ApiService {
       if (params) {
         if (params.search) queryParams.append('search', params.search);
         if (params.verified !== undefined) queryParams.append('verified', params.verified.toString());
+        if (params.role) queryParams.append('role', params.role);
         if (params.from) queryParams.append('from', params.from);
         if (params.to) queryParams.append('to', params.to);
       }
@@ -497,7 +550,7 @@ class ApiService {
     }
   }
 
-  // ===== PROPIEDADES ===== 🏠
+  // ===== PROPIEDADES =====
 
   async getProperties(params?: {
     page?: number;
@@ -709,7 +762,7 @@ class ApiService {
     }
   }
 
-  // ===== PROPIETARIOS ===== 🏢
+  // ===== PROPIETARIOS =====
 
   async getPropertyOwners(params?: {
     page?: number;
